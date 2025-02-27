@@ -11,16 +11,15 @@ from concurrent.futures import ThreadPoolExecutor
 from faster_whisper import WhisperModel, BatchedInferencePipeline
 from pydub import AudioSegment
 from moviepy.editor import VideoFileClip
-# from logger_config import root_logger
 
 import prepare_dialog_with_llama2
 
 import mimetypes
 import traceback
+import logging
 
-# import dialog_temp
-# import dialog_markers
-# import dialog_summary
+logging.basicConfig(filename='errors.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
+
 
 def log_error(func_name, error):
     with open('logs.txt', 'a', encoding = 'utf-8') as f:
@@ -30,11 +29,9 @@ def log_error(func_name, error):
 warnings.filterwarnings("ignore")
 sys.stderr = open('nul', 'w')
 
-# MODEL_NAME = "distil-large-v2"
 MODEL_NAME = "large-v3"
-INPUT_FOLDER = ".\\input\\"
-OUTPUT_FOLDER = ".\\output\\"
-# NUM_THREADS = os.cpu_count() - 4  # Количество доступных процессорных ядер
+INPUT_FOLDER = "D:/python/voice_to_text/whisper/input/"
+OUTPUT_FOLDER = "D:/python/voice_to_text/whisper/output/"
 NUM_THREADS = 1
 
 FOLDERS = ["0", "key", "no_matter"]
@@ -46,19 +43,10 @@ try:
 
     #Batched faster-whisper
     batched_model = BatchedInferencePipeline(model=model)
-
-
-    # or run on GPU with INT8
-    # model = WhisperModel(MODEL_NAME, device="cuda", compute_type="int8_float16")
-    # or run on CPU with INT8
-    # model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
     print(f"Модель {MODEL_NAME} запущена")
 except Exception as e:
-    # root_logger.error("Произошла ошибка при загрузке модели: %s", e, exc_info=True)
     print(f"Произошла ошибка при загрузке модели: {e}")
 
-# spkr_id_file = '.\\speaker_id.scp'
-# model_random_audio = tf.keras.models.load_model("final-model")
 SAMPLING_RATE = 16000
 
 # spkr_id = {}
@@ -77,7 +65,6 @@ def get_files():
                 return path, [os.path.join(path, f) for f in files]
         return None, []
     except Exception as e:
-        # root_logger.error("Ошибка при получении списка файлов: %s", e, exc_info=True)
         print(f"Ошибка при получении списка файлов: {e}")
 
 def get_output_folder(folder_name):
@@ -91,7 +78,6 @@ def get_output_folder(folder_name):
         os.makedirs(folder_path, exist_ok=True)
         return folder_path
     except Exception as e:
-        # root_logger.error("Ошибка при создании выходной папки: %s", e, exc_info=True)
         print(f"Ошибка при создании выходной папки: {e}")
 
 def ensure_mp3(input_file):
@@ -117,7 +103,6 @@ def ensure_mp3(input_file):
         else:
             return input_file
     except Exception as e:
-        # root_logger.error("Ошибка при обработке файла: %s", e, exc_info=True)
         print(f"Ошибка при обработке файла {input_file}: {e}")
 
 def delete_duplicate_lines(output_file):
@@ -141,7 +126,6 @@ def delete_duplicate_lines(output_file):
         with open(output_file, 'w', encoding="UTF-8") as f:
             f.writelines(new_lines)
     except Exception as e:
-        # root_logger.error("Ошибка при удалении дубликатов из файла: %s", e, exc_info=True)
         print(f"Ошибка при удалении дубликатов из файла {output_file}: {e}")
 
 def seconds_to_hms(seconds):
@@ -154,6 +138,7 @@ def seconds_to_hms(seconds):
 
 def process_file(input_file, input_folder, output_folder):
     try:
+        logging.info(f"Processing file: {input_file}")
         print(f"───┐ {input_file}")
 
         start_time = datetime.datetime.now()
@@ -210,6 +195,7 @@ def process_file(input_file, input_folder, output_folder):
         print(f"   |─── время обработки {hours:02}:{minutes:02}:{seconds:02}")
         print(f"   └─── осталось обработать {len(os.listdir(input_folder))}\n")
     except Exception as e:
+        logging.error(f"Error processing file: {input_file}, Error: {e}")
         if "stack expects a non-empty TensorList" in str(e):
             os.remove(input_file)
         elif "list index out of range" in str(e):
@@ -223,6 +209,7 @@ def process():
             input_folder, files = get_files()
 
             while len(files) > 0:
+                # Limit the number of files to process at once to 10
                 files_to_process = files[:3]
                 files = files[3:]
 
@@ -242,5 +229,7 @@ def process():
             print(f"Произошла ошибка в функции process(): {e}")
             traceback.print_exc()
             continue
+
+
 if __name__ == '__main__':
     process()

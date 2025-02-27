@@ -3,7 +3,7 @@ import os
 import gc
 from llama_cpp import Llama
 
-MODEL_PATH = ".\\models\\7B\\OpenHermes-2.5-neural-chat-7b-v3-1-7B-Mistral-7B-Instruct-v0.2-slerp.Q5_K_M.gguf"
+MODEL_PATH = "D:/python/voice_to_text/whisper/models/7B/OpenHermes-2.5-neural-chat-7b-v3-1-7B-Mistral-7B-Instruct-v0.2-slerp.Q5_K_M.gguf"
 
 N_THREADS = 15
 N_BATCH = 512
@@ -18,9 +18,10 @@ REPEAT_PENALTY = 1.1
 LLM = Llama(
     model_path=f"{MODEL_PATH}",
     n_threads = N_THREADS,
-    n_batch = N_BATCH, # Должно быть между 1 и n_ctx, учитывать vram на gpu.
+    n_batch = N_BATCH, # Should be between 1 and n_ctx, consider the amount of VRAM in your GPU.
     n_gpu_layers = N_GPU_LAYERS,
-    n_ctx = N_CTX
+    n_ctx = N_CTX,
+    verbose=False
     )
 
 SYSTEM_PROMPT = """Проанализируйте предоставленный диалог и дайте ответы, соответствующие следующим пунктам. Ответы должны быть предельно краткими, однословными и точно отражать суть каждого вопроса:
