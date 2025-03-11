@@ -12,19 +12,12 @@ from faster_whisper import WhisperModel, BatchedInferencePipeline
 from pydub import AudioSegment
 from moviepy.editor import VideoFileClip
 
+
 import prepare_dialog_with_llama2
 
 import mimetypes
 import traceback
 import logging
-
-logging.basicConfig(filename='errors.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
-
-
-def log_error(func_name, error):
-    with open('logs.txt', 'a', encoding = 'utf-8') as f:
-        timestamp = datetime.datetime.now().strftime('%d.%m.%Y %H:%M:%S')
-        f.write(f'{timestamp} {func_name}, {error}\n')
 
 warnings.filterwarnings("ignore")
 sys.stderr = open('nul', 'w')
@@ -32,6 +25,7 @@ sys.stderr = open('nul', 'w')
 MODEL_NAME = "large-v3"
 INPUT_FOLDER = "D:/python/voice_to_text/whisper/input/"
 OUTPUT_FOLDER = "D:/python/voice_to_text/whisper/output/"
+CHECK_FILE = "D:/python/voice_to_text/whisper/check.txt"
 NUM_THREADS = 1
 
 FOLDERS = ["0", "key", "no_matter"]
@@ -43,10 +37,14 @@ try:
 
     #Batched faster-whisper
     batched_model = BatchedInferencePipeline(model=model)
+
     print(f"Модель {MODEL_NAME} запущена")
 except Exception as e:
+    # root_logger.error("Произошла ошибка при загрузке модели: %s", e, exc_info=True)
     print(f"Произошла ошибка при загрузке модели: {e}")
 
+# spkr_id_file = '.\\speaker_id.scp'
+# model_random_audio = tf.keras.models.load_model("final-model")
 SAMPLING_RATE = 16000
 
 # spkr_id = {}
@@ -138,7 +136,8 @@ def seconds_to_hms(seconds):
 
 def process_file(input_file, input_folder, output_folder):
     try:
-        logging.info(f"Processing file: {input_file}")
+        with open(CHECK_FILE, 'w') as f:
+            f.write(input_file)
         print(f"───┐ {input_file}")
 
         start_time = datetime.datetime.now()
@@ -155,7 +154,7 @@ def process_file(input_file, input_folder, output_folder):
         elif folder_name == "no_matter":
             segments, info = batched_model.transcribe(input_file, batch_size=16, beam_size=5, word_timestamps=True)
         else:
-            raise ValueError(f"Unsupported folder name: {folder_name}")
+            raise ValueError(f"Неподдерживаемая папка: {folder_name}")
 
         results = []
         for segment in segments:
@@ -174,6 +173,7 @@ def process_file(input_file, input_folder, output_folder):
             if len(lines) < 4:
                 os.remove(output_file)
 
+        time.sleep(0.5)
         os.remove(input_file)
 
         segments = None
@@ -195,7 +195,6 @@ def process_file(input_file, input_folder, output_folder):
         print(f"   |─── время обработки {hours:02}:{minutes:02}:{seconds:02}")
         print(f"   └─── осталось обработать {len(os.listdir(input_folder))}\n")
     except Exception as e:
-        logging.error(f"Error processing file: {input_file}, Error: {e}")
         if "stack expects a non-empty TensorList" in str(e):
             os.remove(input_file)
         elif "list index out of range" in str(e):
@@ -204,32 +203,53 @@ def process_file(input_file, input_folder, output_folder):
             print(f"Ошибка при обработке файла {input_file}: {e}")
 
 def process():
+    try:
+        if os.path.exists(CHECK_FILE):
+            with open(CHECK_FILE, 'r') as file:
+                first_line = file.readline().strip()  # Read the first line and remove leading/trailing spaces
+            if os.path.exists(first_line):
+                os.remove(first_line)
+    except Exception as e:
+        print(f"Произошла ошибка при обработке CHECK_FILE: {e}")
+        traceback.print_exc()
+
+    no_files_flag = False
+
     while True:
         try:
             input_folder, files = get_files()
 
+            if files:
+                no_files_flag = False
+
             while len(files) > 0:
-                # Limit the number of files to process at once to 10
-                files_to_process = files[:3]
-                files = files[3:]
+                if len(files) >= 3:
+                    files_to_process = files[:3]
+                    files = files[3:]
+                elif files:
+                    files_to_process = files[:1]
+                    files = files[1:]
+                else:
+                    break
 
-                with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
-                    folder_names = [os.path.basename(os.path.dirname(file)) for file in files_to_process]
-                    output_folder_paths = [get_output_folder(name) for name in folder_names]
-                    executor.map(process_file, files_to_process, [input_folder]*len(files_to_process), output_folder_paths)
+                if files_to_process:
+                    with ThreadPoolExecutor(max_workers=NUM_THREADS) as executor:
+                        folder_names = [os.path.basename(os.path.dirname(file)) for file in files_to_process]
+                        output_folder_paths = [get_output_folder(name) for name in folder_names]
+                        executor.map(process_file, files_to_process, [input_folder]*len(files_to_process), output_folder_paths)
 
-                # Update files and input_folder after processing a batch
                 input_folder, files = get_files()
-            else:
+
+            if not files and not no_files_flag:
                 print("Нет файлов для обработки, ожидаю загрузку новых файлов")
-                time.sleep(60)
+                no_files_flag = True
+
+            time.sleep(60)
 
         except Exception as e:
-            # root_logger.error("Произошла ошибка в функции process(): %s", e, exc_info=True)
             print(f"Произошла ошибка в функции process(): {e}")
             traceback.print_exc()
             continue
-
 
 if __name__ == '__main__':
     process()
